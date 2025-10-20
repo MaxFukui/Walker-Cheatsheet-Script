@@ -58,7 +58,7 @@ parse_cheatsheet() {
         # Only print if both parts exist
         if (description != "" && command != "") {
             # Format with nice alignment (50 chars for description column)
-            printf "%-40s → %s\n", description, command;
+            printf "%-30s → %s\n", description, command;
         }
     }'
 }
@@ -68,7 +68,7 @@ display_cheatsheet() {
     local selected_file="$1"
     
     # Parse and format the cheatsheet, then show in walker
-    selected_entry=$(cat "$selected_file" | parse_cheatsheet | walker --dmenu -p 'Cheatsheet' -w 1000 -h "$menu_height")
+    selected_entry=$(cat "$selected_file" | parse_cheatsheet | walker --dmenu -p 'Cheatsheet' --width 1000 --height "$menu_height")
     
     # If an entry was selected, handle it
     if [ -n "$selected_entry" ]; then
@@ -89,7 +89,7 @@ display_cheatsheet() {
 }
 
 # Main logic: First menu (category selection)
-category_selection=$(display_categories | walker --dmenu -p 'Select Cheatsheet' -w 1000 -h "$menu_height")
+category_selection=$(display_categories | walker --dmenu -p 'Select Cheatsheet' --width 1000 --height "$menu_height")
 
 # If a category was selected, show its cheatsheet
 if [ -n "$category_selection" ]; then
