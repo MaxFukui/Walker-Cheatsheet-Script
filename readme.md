@@ -6,7 +6,7 @@ A two-level fuzzy-searchable cheatsheet system for Hyprland using Walker.
 
 1. Create the cheatsheet directory structure:
 ```bash
-mkdir -p ~/.config/cheatsheet/sheets
+mkdir -p ~/.config/cheatsheet/sheets ~/.config/cheatsheet/prompts
 ```
 
 2. Copy the main script:
@@ -39,6 +39,11 @@ hyprctl reload
 5. Select a command to see it in a notification
 
 ## Creating New Cheatsheets
+
+### Prompts
+- Select "Prompts" in the first menu to list files from `~/.config/cheatsheet/prompts`.
+- Selecting a file copies its entire content to your clipboard (supports wl-copy/xclip/xsel).
+
 
 Create a new markdown file in `~/.config/cheatsheet/sheets/`:
 

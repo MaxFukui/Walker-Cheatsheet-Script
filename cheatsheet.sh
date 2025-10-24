@@ -3,6 +3,7 @@
 # A two-level menu system for organizing and accessing cheatsheets
 
 CHEATSHEET_DIR="$HOME/.config/cheatsheet/sheets"
+PROMPTS_DIR="$HOME/.config/cheatsheet/prompts"
 
 # Ensure the cheatsheet directory exists
 if [ ! -d "$CHEATSHEET_DIR" ]; then
@@ -36,8 +37,36 @@ list_categories() {
 
 # Function to display only headers for the first menu
 display_categories() {
+    echo "Prompts"
     list_categories | awk -F'|' '{print $1}'
 }
+# Clipboard helper: copies stdin using available tool
+copy_to_clipboard() {
+    if command -v wl-copy >/dev/null 2>&1; then
+        wl-copy
+    elif command -v xclip >/dev/null 2>&1; then
+        xclip -selection clipboard
+    elif command -v xsel >/dev/null 2>&1; then
+        xsel -b
+    else
+        cat >/dev/null
+        notify-send "Cheatsheet" "No clipboard tool found (wl-copy/xclip/xsel)"
+        return 1
+    fi
+}
+
+# List prompts as "Header|filepath"; fallback to filename when no markdown header
+list_prompts() {
+    for file in "$PROMPTS_DIR"/*; do
+        [ -f "$file" ] || continue
+        header=$(get_header "$file")
+        if [ -z "$header" ]; then
+            header=$(basename "$file")
+        fi
+        echo "$header|$file"
+    done
+}
+
 
 # Function to parse and format cheatsheet entries (inspired by parse_bindings)
 parse_cheatsheet() {
@@ -61,6 +90,23 @@ parse_cheatsheet() {
             printf "%-30s → %s\n", description, command;
         }
     }'
+}
+# Prompts flow: select a prompt then copy its content
+handle_prompts() {
+    # Ensure prompts directory exists
+    if [ ! -d "$PROMPTS_DIR" ]; then
+        notify-send "Prompts" "Directory not found: $PROMPTS_DIR"
+        return
+    fi
+    # Show list of prompts
+    prompt_sel=$(list_prompts | awk -F'|' '{print $1}' | walker --dmenu -p 'Prompts' --width 1000 --height "$menu_height")
+    [ -z "$prompt_sel" ] && return
+    file=$(list_prompts | awk -F'|' -v sel="$prompt_sel" '$1==sel{print $2; exit}')
+    [ -z "$file" ] && return
+    content=$(cat "$file")
+    if [ -n "$content" ]; then
+        printf "%s" "$content" | copy_to_clipboard && notify-send "Prompts" "Copied: $prompt_sel"
+    fi
 }
 
 # Function to display the cheatsheet content
@@ -89,15 +135,18 @@ display_cheatsheet() {
 }
 
 # Main logic: First menu (category selection)
-category_selection=$(display_categories | walker --dmenu -p 'Select Cheatsheet' --width 1000 --height "$menu_height")
+category_selection=$(display_categories | walker --dmenu -p 'Select' --width 1000 --height "$menu_height")
 
-# If a category was selected, show its cheatsheet
+# If a category was selected, route accordingly
 if [ -n "$category_selection" ]; then
-    # Find the file that matches this header
-    selected_file=$(list_categories | grep "^$category_selection|" | awk -F'|' '{print $2}')
-    
-    # Display the cheatsheet entries
-    if [ -n "$selected_file" ]; then
-        display_cheatsheet "$selected_file"
+    if [ "$category_selection" = "Prompts" ]; then
+        handle_prompts
+    else
+        # Find the file that matches this header
+        selected_file=$(list_categories | grep "^$category_selection|" | awk -F'|' '{print $2}')
+        # Display the cheatsheet entries
+        if [ -n "$selected_file" ]; then
+            display_cheatsheet "$selected_file"
+        fi
     fi
 fi
