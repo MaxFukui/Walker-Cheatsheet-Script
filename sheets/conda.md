@@ -20,3 +20,4 @@ Show conda info | conda info
 Show conda version | conda --version
 View conda configuration | conda config --show
 Add channel | conda config --add channels <channel_name>
+Instal packages file | conda update env --path <path> --file environments.yml

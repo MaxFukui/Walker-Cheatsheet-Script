@@ -4,6 +4,7 @@
 
 CHEATSHEET_DIR="$HOME/.config/cheatsheet/sheets"
 PROMPTS_DIR="$HOME/.config/cheatsheet/prompts"
+LINKS_DIR="$HOME/.config/cheatsheet/links"
 
 # Ensure the cheatsheet directory exists
 if [ ! -d "$CHEATSHEET_DIR" ]; then
@@ -38,6 +39,9 @@ list_categories() {
 # Function to display only headers for the first menu
 display_categories() {
     echo "Prompts"
+    echo "Links"
+    echo "BW Hash"
+    echo "Edit Sheets"
     list_categories | awk -F'|' '{print $1}'
 }
 # Clipboard helper: copies stdin using available tool
@@ -64,6 +68,26 @@ list_prompts() {
             header=$(basename "$file")
         fi
         echo "$header|$file"
+    done
+}
+
+# List links as "Name|URL" from markdown files
+list_links() {
+    for file in "$LINKS_DIR"/*.md; do
+        [ -f "$file" ] || continue
+        # Parse each line for "Name | URL" format
+        awk -F'|' '
+        /^[[:space:]]*$/ { next }
+        /^#/ { next }
+        {
+            name = $1;
+            url = $2;
+            gsub(/^[ \t]+|[ \t]+$/, "", name);
+            gsub(/^[ \t]+|[ \t]+$/, "", url);
+            if (name != "" && url != "") {
+                print name "|" url;
+            }
+        }' "$file"
     done
 }
 
@@ -109,6 +133,42 @@ handle_prompts() {
     fi
 }
 
+# Links flow: select a link then open it in Firefox
+handle_links() {
+    # Ensure links directory exists
+    if [ ! -d "$LINKS_DIR" ]; then
+        notify-send "Links" "Directory not found: $LINKS_DIR"
+        return
+    fi
+    # Show list of links
+    link_sel=$(list_links | awk -F'|' '{print $1}' | walker --dmenu -p 'Links' --width 1000 --height "$menu_height")
+    [ -z "$link_sel" ] && return
+    url=$(list_links | awk -F'|' -v sel="$link_sel" '$1==sel{print $2; exit}')
+    [ -z "$url" ] && return
+    # Open URL in Firefox
+    firefox "$url" &
+    notify-send "Links" "Opening: $link_sel"
+}
+
+# BW Hash flow: prompt for passphrase, generate SHA256 hash, copy to clipboard
+handle_bwhash() {
+    # Prompt for passphrase using zenity password dialog
+    passphrase=$(zenity --password --title="Bitwarden" --text="Enter your Bitwarden passphrase:")
+    [ -z "$passphrase" ] && return
+    # Generate SHA256 hash and copy to clipboard
+    hash=$(echo -n "$passphrase" | sha256sum | cut -d" " -f1)
+    if [ -n "$hash" ]; then
+        echo -n "$hash" | copy_to_clipboard && notify-send "Bitwarden" "Hash copied to clipboard!"
+    else
+        notify-send "Bitwarden" "Failed to generate hash"
+    fi
+}
+
+# Edit Sheets flow: open ghostty terminal with neovim in cheatsheet directory
+handle_edit_sheets() {
+    ghostty -e bash -c "cd $HOME/.config/cheatsheet && nvim ." &
+}
+
 # Function to display the cheatsheet content
 display_cheatsheet() {
     local selected_file="$1"
@@ -141,6 +201,12 @@ category_selection=$(display_categories | walker --dmenu -p 'Select' --width 100
 if [ -n "$category_selection" ]; then
     if [ "$category_selection" = "Prompts" ]; then
         handle_prompts
+    elif [ "$category_selection" = "Links" ]; then
+        handle_links
+    elif [ "$category_selection" = "BW Hash" ]; then
+        handle_bwhash
+    elif [ "$category_selection" = "Edit Sheets" ]; then
+        handle_edit_sheets
     else
         # Find the file that matches this header
         selected_file=$(list_categories | grep "^$category_selection|" | awk -F'|' '{print $2}')

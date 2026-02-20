@@ -19,4 +19,8 @@ Search in files | grep -r <pattern> <path>
 Archive directory | tar -czf archive.tar.gz <directory>
 Extract archive | tar -xzf archive.tar.gz
 Check systemd service status | systemctl status <service>
+Sort | sort -k5 (Column) -rh (Reverse, human-numeric-sort)
+Tail stating from line 2 | tail -n +2 (plus means starts from line 2)
 Restart systemd service | systemctl restart <service>
+See json | jq '.' file.json or file.json /pipe/ jq '.'
+count lines | ls /pipe/ wc -l
