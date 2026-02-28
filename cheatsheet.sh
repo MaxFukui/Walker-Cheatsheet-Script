@@ -98,19 +98,30 @@ parse_cheatsheet() {
     # Skip empty lines and markdown headers
     /^[[:space:]]*$/ { next }
     /^#/ { next }
-    
+
+    # Handle informational lines (starting with ~)
+    /^~/ {
+        note = $0;
+        gsub(/^~[ \t]*/, "", note);
+        gsub(/[ \t]+$/, "", note);
+        if (note != "") {
+            printf "ℹ %s\n", note;
+        }
+        next
+    }
+
     {
         # Extract description (left side) and command (right side)
         description = $1;
         command = $2;
-        
+
         # Trim whitespace
         gsub(/^[ \t]+|[ \t]+$/, "", description);
         gsub(/^[ \t]+|[ \t]+$/, "", command);
-        
+
         # Only print if both parts exist
         if (description != "" && command != "") {
-            # Format with nice alignment (50 chars for description column)
+            # Format with nice alignment (30 chars for description column)
             printf "%-30s → %s\n", description, command;
         }
     }'
@@ -172,25 +183,24 @@ handle_edit_sheets() {
 # Function to display the cheatsheet content
 display_cheatsheet() {
     local selected_file="$1"
-    
+
     # Parse and format the cheatsheet, then show in walker
     selected_entry=$(cat "$selected_file" | parse_cheatsheet | walker --dmenu -p 'Cheatsheet' --width 1000 --height "$menu_height")
-    
+
     # If an entry was selected, handle it
     if [ -n "$selected_entry" ]; then
-        # Extract the command (everything after →)
-        command=$(echo "$selected_entry" | awk -F'→' '{print $2}' | sed 's/^ *//')
-        
-        # For now, just show it in a notification
-        # This is where you can extend functionality later:
-        # - Copy to clipboard: echo -n "$command" | wl-copy
-        # - Execute command: eval "$command"
-        # - Insert at cursor: wtype "$command"
-        
-        notify-send "Cheatsheet" "$command"
-        
-        # Uncomment this line if you want to copy to clipboard:
-        # echo -n "$command" | wl-copy
+        # Informational entries (~ lines displayed as ℹ) — show notification only
+        if [[ "$selected_entry" == "ℹ"* ]]; then
+            note="${selected_entry#ℹ }"
+            notify-send "Cheatsheet" "$note"
+            return
+        fi
+
+        # Regular entries — extract value (everything after →) and copy to clipboard
+        value=$(echo "$selected_entry" | awk -F'→' '{print $2}' | sed 's/^ *//')
+        if [ -n "$value" ]; then
+            echo -n "$value" | copy_to_clipboard && notify-send "Cheatsheet" "Copied: $value"
+        fi
     fi
 }
 
