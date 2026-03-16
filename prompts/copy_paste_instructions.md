@@ -8,6 +8,7 @@ FORMAT RULES:
 3. Every entry line MUST be: Description | value_to_copy
    - Left side: short human description of what it is (under 30 characters)
    - Right side: the exact value the user will paste (command, shortcut, symbol, etc.)
+   - The right side CAN contain pipe characters (|) — only the first | is used as delimiter
 4. Use ~ prefix for informational notes: ~ note text
    - These appear in the menu with an ℹ prefix for context
    - They are NOT copied to clipboard when selected
