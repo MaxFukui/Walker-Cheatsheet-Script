@@ -94,7 +94,7 @@ list_links() {
 
 # Function to parse and format cheatsheet entries (inspired by parse_bindings)
 parse_cheatsheet() {
-    awk -F'|' '
+    awk '
     # Skip empty lines and markdown headers
     /^[[:space:]]*$/ { next }
     /^#/ { next }
@@ -111,9 +111,11 @@ parse_cheatsheet() {
     }
 
     {
-        # Extract description (left side) and command (right side)
-        description = $1;
-        command = $2;
+        # Split only on the first | so commands containing pipes are preserved
+        idx = index($0, "|");
+        if (idx == 0) { next }
+        description = substr($0, 1, idx - 1);
+        command = substr($0, idx + 1);
 
         # Trim whitespace
         gsub(/^[ \t]+|[ \t]+$/, "", description);
@@ -121,7 +123,6 @@ parse_cheatsheet() {
 
         # Only print if both parts exist
         if (description != "" && command != "") {
-            # Format with nice alignment (30 chars for description column)
             printf "%-30s → %s\n", description, command;
         }
     }'

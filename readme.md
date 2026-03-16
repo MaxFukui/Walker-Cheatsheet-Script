@@ -60,6 +60,7 @@ Another description | another_value
 - Each entry: `description | value_to_copy`
   - Left side: short human description (what it is)
   - Right side: the value that gets copied to clipboard on selection
+  - The right side can contain `|` (pipe) characters — only the **first** `|` is used as delimiter
 - `~ note text` — informational line; shown in menu with `ℹ` prefix, selecting shows a notification (nothing copied)
 - Empty lines are ignored
 
@@ -79,6 +80,9 @@ Pull image | docker pull <image>
 Build image | docker build -t <name> .
 
 ~ Use <name> placeholders for values you fill in at runtime
+
+## Piped commands
+Filter logs | docker logs <container> | grep "error"
 ```
 
 ## Adding Prompts
