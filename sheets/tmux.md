@@ -37,3 +37,5 @@ Set pane title | Prefix + :select-pane -T <title>
 Respawn pane | Prefix + :respawn-pane
 Capture pane to buffer | Prefix + :capture-pane
 Save buffer to file | Prefix + :save-buffer <file>
+Save session Resurrect | Prefix + Ctrl-S
+Load session Resurrect | Prefix + Ctrl-R
