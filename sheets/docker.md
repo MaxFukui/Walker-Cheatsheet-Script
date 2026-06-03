@@ -1,4 +1,3 @@
-
 # Docker - Container Management
 
 List all containers | docker ps -a
@@ -26,3 +25,4 @@ Copy files to container | docker cp <file> <container>:<path>
 Copy files from container | docker cp <container>:<path> <file>
 Run container from image | docker run -d --name <name> <image>
 Run container with port mapping | docker run -d -p <host>:<container> <image>
+
