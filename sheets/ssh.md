@@ -3,6 +3,12 @@
 Tunneling access compressed data for browsing | ssh -D 8280 -N -C <server>
 Forward specific port to internal LAN machine | ssh -L <local_port>:<internal_ip>:<remote_port> <server>
 
+## Local Port Forwarding
+~ Brings a remote localhost port to your local machine (OAuth, DBs, dev servers)
+Access remote localhost in browser | ssh -L <local_port>:localhost:<remote_port> <server>
+Same port both sides (simpler) | ssh -L <port>:localhost:<port> <server>
+Keep tunnel open, no shell | ssh -L <port>:localhost:<port> -N <server>
+
 ## Jump Host
 ~ Jump host (-J) relays your connection through an intermediary server
 Connect via single jump host | ssh -J <jump> <target>
