@@ -1,7 +1,7 @@
 # Apps
 
-Firefox (New Window) | Firefox | new
-Ghostty (New Window) | Ghostty | new
-Finder (New Window) | Finder | new
-Safari (New Window) | Safari | new
+Firefox (New Window) | Firefox
+Ghostty (New Window) | Ghostty
+Finder (New Window) | Finder
+Safari (New Window) | Safari
 Mail | Mail | focus

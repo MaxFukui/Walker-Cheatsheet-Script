@@ -31,6 +31,164 @@ local function utility(kind, text, subText, icons)
     }
 end
 
+function M.hammerspoonAdapter(hsApi)
+    local adapter = { configDir = hsApi.configdir }
+    local log = hsApi.logger.new("cheatsheet")
+    local imageCache = {}
+    local chooserCallback
+    local chooser = hsApi.chooser.new(function(choice)
+        if choice and chooserCallback then chooserCallback(choice._record or choice) end
+    end)
+
+    function adapter:realpath(path)
+        return hsApi.fs.pathToAbsolute(path)
+    end
+
+    function adapter:parent(path)
+        return path and path:match("^(.*)/[^/]+$")
+    end
+
+    function adapter:listRegularFiles(directory)
+        local ok, iterator, state = pcall(hsApi.fs.dir, directory)
+        if not ok then return nil, iterator end
+        local files = {}
+        for name in iterator, state do
+            if name ~= "." and name ~= ".." then
+                local path = directory .. "/" .. name
+                if hsApi.fs.attributes(path, "mode") == "file" then
+                    table.insert(files, path)
+                end
+            end
+        end
+        table.sort(files)
+        return files
+    end
+
+    function adapter:readFile(path)
+        local file, openError = io.open(path, "r")
+        if not file then return nil, openError end
+        local content = file:read("*a")
+        file:close()
+        return content
+    end
+
+    function adapter:log(message)
+        log.e(message)
+    end
+
+    function adapter:notify(title, message)
+        hsApi.notify.new({ title = title, informativeText = message }):send()
+    end
+
+    function adapter:showChooser(records, callback)
+        local rows = {}
+        for _, record in ipairs(records) do
+            local icon
+            if record.image then
+                if imageCache[record.image] == nil then
+                    imageCache[record.image] = hsApi.image.imageFromName(record.image)
+                        or hsApi.image.imageFromName("NSAdvanced") or false
+                end
+                icon = imageCache[record.image] or nil
+            end
+            table.insert(rows, {
+                text = record.text,
+                subText = record.subText,
+                image = icon,
+                _record = record,
+            })
+        end
+        chooserCallback = callback
+        chooser:choices(rows)
+        chooser:show()
+    end
+
+    function adapter:setPasteboard(content)
+        local ok = hsApi.pasteboard.setContents(content)
+        return ok, ok and nil or "pasteboard rejected content"
+    end
+
+    function adapter:openURL(url)
+        local ok = hsApi.urlevent.openURL(url)
+        return ok, ok and nil or "URL could not be opened"
+    end
+
+    function adapter:launchOrFocus(appName)
+        local ok = hsApi.application.launchOrFocus(appName)
+        return ok, ok and nil or "application could not be launched"
+    end
+
+    function adapter:openNewWindow(appName, retryInterval, timeout, callback)
+        local launched = hsApi.application.launchOrFocus(appName)
+        if not launched then
+            callback(false, "application could not be launched")
+            return
+        end
+
+        local finished = false
+        local waitTimer
+        local timeoutTimer
+        local function finish(ok, detail)
+            if finished then return end
+            finished = true
+            if waitTimer then waitTimer:stop() end
+            if timeoutTimer then timeoutTimer:stop() end
+            callback(ok, detail)
+        end
+
+        waitTimer = hsApi.timer.waitUntil(function()
+            return hsApi.application.get(appName) ~= nil
+        end, function()
+            local app = hsApi.application.get(appName)
+            if not app then return finish(false, "application disappeared") end
+            hsApi.eventtap.keyStroke({ "cmd" }, "n", 0, app)
+            finish(true)
+        end, retryInterval)
+        timeoutTimer = hsApi.timer.doAfter(timeout, function()
+            finish(false, "timed out waiting for " .. appName)
+        end)
+    end
+
+    function adapter:runHashDialog(callback)
+        local ok, input, detail = hsApi.osascript.applescript(
+            'display dialog "Enter your Bitwarden passphrase:" default answer "" ' ..
+            'with hidden answer with title "Bitwarden"\ntext returned of result'
+        )
+        if not ok then return callback(false, detail or "dialog cancelled") end
+        if input == nil or input == "" then return callback(false, "no input supplied") end
+
+        local task = hsApi.task.new("/usr/bin/shasum", function(exitCode, stdOut, stdErr)
+            local hash = stdOut and stdOut:match("^(%x+)")
+            if exitCode ~= 0 or not hash then
+                return callback(false, stdErr or "shasum failed")
+            end
+            local copied = hsApi.pasteboard.setContents(hash)
+            callback(copied, copied and nil or "pasteboard rejected hash")
+        end, { "-a", "256" })
+        task:setInput(input)
+        if not task:start() then callback(false, "shasum could not start") end
+    end
+
+    function adapter:editSheets(root, terminal, editor, callback)
+        local task = hsApi.task.new("/usr/bin/open", function(exitCode, _, stdErr)
+            callback(exitCode == 0, exitCode == 0 and nil or (stdErr or "editor launch failed"))
+        end, {
+            "-na", terminal, "--args", "--working-directory=" .. root,
+            "-e", editor, ".",
+        })
+        if not task:start() then callback(false, "editor launch could not start") end
+    end
+
+    function adapter:modifiers()
+        return hsApi.eventtap.checkKeyboardModifiers()
+    end
+
+    local config = require("config")
+    chooser:width(config.chooser.width)
+    chooser:rows(config.chooser.rows)
+    return adapter
+end
+
 function M.new(adapter, config)
     assert(adapter, "adapter is required")
     assert(config, "config is required")
@@ -207,6 +365,24 @@ function Controller:perform(record, modifiers)
     end
 
     return self:reportFailure("Action", "unsupported kind " .. tostring(kind))
+end
+
+local defaultController
+
+local function default()
+    if not defaultController then
+        local hsApi = assert(rawget(_G, "hs"), "global hs is required")
+        defaultController = M.new(M.hammerspoonAdapter(hsApi), require("config"))
+    end
+    return defaultController
+end
+
+function M.show()
+    return default():show()
+end
+
+function M.validate()
+    return default():buildIndex()
 end
 
 return M
