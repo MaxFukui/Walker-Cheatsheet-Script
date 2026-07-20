@@ -42,3 +42,30 @@ t.test("apps default to new and reject unknown modes", function()
     t.equal(#parsed.entries, 2)
     t.equal(parsed.diagnostics[1].line, 4)
 end)
+
+t.test("sheet record exposes readable and searchable metadata", function()
+    local parsed = core.parseSheet("# Git\n## Branches\nCreate | git switch -c x\n", "sheets/git.md")
+    local record = core.sheetRecords(parsed, "sheets/git.md", {})[1]
+    t.equal(record.text, "Create")
+    t.equal(record.subText, "Git › Branches · Copy command")
+    t.truthy(record.searchText:find("git branches create", 1, true))
+    t.equal(record.payload, "git switch -c x")
+end)
+
+t.test("all source types normalize to explicit actions", function()
+    local prompt = core.promptRecord(
+        core.parsePrompt("# Developer\nBody", "dev.md", "prompts/dev.md"),
+        "prompts/dev.md", {}
+    )
+    local link = core.linkRecords(
+        core.parseLinks("GitHub | https://github.com", "links/general.md"),
+        "links/general.md", {}
+    )[1]
+    local app = core.appRecords(
+        core.parseApps("Firefox | Firefox", "hammerspoon/apps/general.md"),
+        "hammerspoon/apps/general.md", {}
+    )[1]
+    t.equal(prompt.kind, "prompt")
+    t.equal(link.subText, "Link · Open in default browser")
+    t.equal(app.subText, "App · Open new window · ⌘↵ Focus")
+end)

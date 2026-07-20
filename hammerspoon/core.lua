@@ -113,4 +113,60 @@ function M.parseApps(content, source)
     end)
 end
 
+local function joined(...)
+    local values = {}
+    for _, value in ipairs({ ... }) do
+        if value and value ~= "" then table.insert(values, value:lower()) end
+    end
+    return table.concat(values, " ")
+end
+
+local function record(kind, text, subText, payload, source, searchText, icons)
+    return {
+        kind = kind, text = text, subText = subText, payload = payload,
+        source = source, searchText = searchText, image = icons[kind],
+    }
+end
+
+function M.sheetRecords(parsed, source, icons)
+    local records = {}
+    for _, entry in ipairs(parsed.entries) do
+        local location = parsed.title .. (entry.section and " › " .. entry.section or "")
+        if entry.kind == "command" then
+            table.insert(records, record("command", entry.description,
+                location .. " · Copy command", entry.value, source,
+                joined(parsed.title, entry.section, entry.description, entry.value, "command"), icons))
+        else
+            table.insert(records, record("note", entry.text,
+                location .. " · Show note", entry.text, source,
+                joined(parsed.title, entry.section, entry.text, "note"), icons))
+        end
+    end
+    return records
+end
+
+function M.promptRecord(parsed, source, icons)
+    return record("prompt", parsed.title, "Prompt · Copy full content",
+        parsed.content, source, joined("prompt", parsed.title, source), icons)
+end
+
+function M.linkRecords(parsed, source, icons)
+    local records = {}
+    for _, entry in ipairs(parsed.entries) do
+        table.insert(records, record("link", entry.name, "Link · Open in default browser",
+            entry.url, source, joined("link", entry.name, entry.url), icons))
+    end
+    return records
+end
+
+function M.appRecords(parsed, source, icons)
+    local records = {}
+    for _, entry in ipairs(parsed.entries) do
+        local action = entry.mode == "new" and "Open new window · ⌘↵ Focus" or "Focus"
+        table.insert(records, record("app", entry.name, "App · " .. action,
+            entry, source, joined("app", entry.name, entry.app, entry.mode), icons))
+    end
+    return records
+end
+
 return M
