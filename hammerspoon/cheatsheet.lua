@@ -159,12 +159,13 @@ function M.hammerspoonAdapter(hsApi)
 
         local task = hsApi.task.new("/usr/bin/shasum", function(exitCode, stdOut, stdErr)
             local hash = stdOut and stdOut:match("^(%x+)")
-            if exitCode ~= 0 or not hash then
+            if exitCode ~= 0 or not hash or #hash ~= 64 then
                 return callback(false, stdErr or "shasum failed")
             end
             local copied = hsApi.pasteboard.setContents(hash)
             callback(copied, copied and nil or "pasteboard rejected hash")
         end, { "-a", "256" })
+        if not task then return callback(false, "shasum task could not be created") end
         task:setInput(input)
         if not task:start() then callback(false, "shasum could not start") end
     end
@@ -176,6 +177,7 @@ function M.hammerspoonAdapter(hsApi)
             "-na", terminal, "--args", "--working-directory=" .. root,
             "-e", editor, ".",
         })
+        if not task then return callback(false, "editor task could not be created") end
         if not task:start() then callback(false, "editor launch could not start") end
     end
 
