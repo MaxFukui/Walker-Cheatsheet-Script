@@ -44,10 +44,20 @@ function M.hammerspoonAdapter(hsApi)
         return value and value ~= "" and value or fallback
     end
 
+    local function isSubsequence(needle, haystack)
+        local position = 1
+        for index = 1, #needle do
+            position = haystack:find(needle:sub(index, index), position, true)
+            if not position then return false end
+            position = position + 1
+        end
+        return true
+    end
+
     local function matchesSearch(record, query)
         local haystack = (record.searchText or ((record.text or "") .. " " .. (record.subText or ""))):lower()
         for token in (query or ""):lower():gmatch("%S+") do
-            if not haystack:find(token, 1, true) then return false end
+            if not isSubsequence(token, haystack) then return false end
         end
         return true
     end
@@ -119,6 +129,8 @@ function M.hammerspoonAdapter(hsApi)
         chooser:queryChangedCallback(function(query)
             chooser:choices(rowsFor(query))
         end)
+        -- Setting the field does not invoke queryChangedCallback; reset stale state before repopulating.
+        chooser:query("")
         chooser:choices(rowsFor(""))
         chooser:show()
     end

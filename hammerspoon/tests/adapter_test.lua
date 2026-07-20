@@ -8,12 +8,18 @@ local requiredMethods = {
 }
 
 local function fakeHs()
-    local chooser = { choiceSets = {} }
+    local chooser = { choiceSets = {}, queryValue = "stale query", querySetCalls = 0 }
     function chooser:width() return self end
     function chooser:rows() return self end
     function chooser:choices(rows) table.insert(self.choiceSets, rows); return self end
     function chooser:show() return self end
     function chooser:queryChangedCallback(fn) self.queryCallback = fn; return self end
+    function chooser:query(value)
+        if value == nil then return self.queryValue end
+        self.queryValue = value
+        self.querySetCalls = self.querySetCalls + 1
+        return self
+    end
     return {
         configdir = "/tmp/.hammerspoon",
         chooser = { new = function() return chooser end },
@@ -43,6 +49,40 @@ t.test("chooser filters unified metadata while preserving readable rows", functi
     chooser.queryCallback("app firefox")
     t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
     t.equal(chooser.choiceSets[#chooser.choiceSets][1].text, "Firefox")
+end)
+
+t.test("chooser fuzzy-matches every query token as a case-insensitive subsequence", function()
+    local hs = fakeHs()
+    local adapter = cheatsheet.hammerspoonAdapter(hs)
+    adapter:showChooser({
+        { text = "Create branch", subText = "Git › Branches", searchText = "git branches create git switch -c command" },
+        { text = "Status", subText = "Git", searchText = "git status command" },
+    }, function() end)
+    local chooser = hs.chooser.new()
+    chooser.queryCallback("G brnch")
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
+    t.equal(chooser.choiceSets[#chooser.choiceSets][1].text, "Create branch")
+    chooser.queryCallback("g swtc")
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
+    t.equal(chooser.choiceSets[#chooser.choiceSets][1].text, "Create branch")
+    chooser.queryCallback("git missing")
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 0)
+end)
+
+t.test("each chooser opening clears stale query before restoring all choices", function()
+    local hs = fakeHs()
+    local adapter = cheatsheet.hammerspoonAdapter(hs)
+    local records = { { text = "Status", subText = "Git", searchText = "git status" } }
+    adapter:showChooser(records, function() end)
+    local chooser = hs.chooser.new()
+    t.equal(chooser.queryValue, "")
+    t.equal(chooser.querySetCalls, 1)
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
+    chooser.queryValue = "another stale query"
+    adapter:showChooser(records, function() end)
+    t.equal(chooser.queryValue, "")
+    t.equal(chooser.querySetCalls, 2)
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
 end)
 
 t.test("configured icons request distinct documented system image names with safe fallback", function()

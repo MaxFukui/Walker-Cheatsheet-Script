@@ -88,3 +88,28 @@ appearance/availability of AppKit named icons on the target macOS release,
 chooser layout and query interaction, targeted app window creation, browser and
 editor launch, and BW Hash execution. Automated stubs cannot render AppKit
 images or exercise macOS application focus/accessibility behavior.
+
+## Re-review: fuzzy metadata and chooser reset
+
+The metadata matcher now treats each whitespace-separated query token as a
+case-insensitive subsequence of `record.searchText`; every token must match.
+This restores abbreviated/fuzzy queries without changing stable record order
+or the readable chooser row fields. Adapter regressions cover exact queries,
+`G brnch`, abbreviated command query `g swtc`, multi-token AND behavior, and a
+zero-result nonmatch.
+
+Every `showChooser` call now uses the documented `chooser:query("")` API before
+restoring the complete choice list. Installed `docs.json` documents explicit
+empty string as clearing the query. Installed/upstream `libchooser.m` shows the
+setter only assigns `queryField.stringValue`; `HSChooser.m` shows query callbacks
+are invoked by `controlTextDidChange`, so this reset does not recursively invoke
+the Lua callback. Stub coverage opens the chooser twice and verifies both stale
+queries are cleared and all choices restored.
+
+RED: `lua hammerspoon/tests/run.lua` produced exactly two failures: fuzzy query
+expected one result but got zero; reset expected an empty query but retained
+`stale query`.
+
+GREEN: `lua hammerspoon/tests/run.lua` passed 30 tests with 0 failures.
+`luac -p hammerspoon/*.lua hammerspoon/tests/*.lua` and `git diff --check` both
+exited 0.
