@@ -132,4 +132,81 @@ function Controller:show()
     end)
 end
 
+function Controller:reportFailure(action, detail)
+    local message = action .. " failed"
+    if detail and detail ~= "" then message = message .. ": " .. tostring(detail) end
+    self.adapter:log(message)
+    self.adapter:notify("Cheatsheet Error", message)
+    return false
+end
+
+function Controller:perform(record, modifiers)
+    modifiers = modifiers or {}
+    if not record or not record.kind then
+        return self:reportFailure("Action", "invalid record")
+    end
+
+    local kind = record.kind
+    if kind == "command" or kind == "prompt" then
+        local ok, detail = self.adapter:setPasteboard(record.payload)
+        if not ok then return self:reportFailure("Copy " .. (record.text or kind), detail) end
+        self.adapter:notify("Cheatsheet", "Copied " .. (record.text or kind))
+        return true
+    elseif kind == "note" then
+        self.adapter:notify("Cheatsheet", record.text or "Note")
+        return true
+    elseif kind == "link" then
+        local ok, detail = self.adapter:openURL(record.payload)
+        if not ok then return self:reportFailure("Open " .. (record.text or "link"), detail) end
+        self.adapter:notify("Cheatsheet", "Opened " .. (record.text or "link"))
+        return true
+    elseif kind == "app" then
+        local payload = record.payload or {}
+        if modifiers.cmd or payload.mode == "focus" then
+            local ok, detail = self.adapter:launchOrFocus(payload.app)
+            if not ok then return self:reportFailure("Focus " .. (record.text or "app"), detail) end
+            self.adapter:notify("Cheatsheet", "Focused " .. (record.text or "app"))
+            return true
+        elseif payload.mode == "new" then
+            self.adapter:openNewWindow(
+                payload.app,
+                self.config.newWindow.retryInterval,
+                self.config.newWindow.timeout,
+                function(ok, detail)
+                    if ok then
+                        self.adapter:notify("Cheatsheet", "Opened new " .. (record.text or "window"))
+                    else
+                        self:reportFailure("Open new " .. (record.text or "window"), detail)
+                    end
+                end
+            )
+            return true
+        end
+        return self:reportFailure("Open " .. (record.text or "app"), "unsupported mode")
+    elseif kind == "bwhash" then
+        self.adapter:runHashDialog(function(ok, detail)
+            if ok then
+                self.adapter:notify("Cheatsheet", "Hash copied")
+            else
+                self:reportFailure("BW Hash", detail)
+            end
+        end)
+        return true
+    elseif kind == "editsheets" then
+        self.adapter:editSheets(self.root, self.config.terminal, self.config.editor, function(ok, detail)
+            if ok then
+                self.adapter:notify("Cheatsheet", "Opened sheets")
+            else
+                self:reportFailure("Edit Sheets", detail)
+            end
+        end)
+        return true
+    elseif kind == "diagnostic" then
+        self.adapter:notify("Cheatsheet", "See Hammerspoon logs for details")
+        return true
+    end
+
+    return self:reportFailure("Action", "unsupported kind " .. tostring(kind))
+end
+
 return M
