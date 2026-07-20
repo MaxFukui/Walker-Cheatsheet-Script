@@ -52,6 +52,14 @@
 
 - [ ] **Step 1: Add the dependency-free test harness**
 
+Add a loadable behavior-free module so the red run reaches the test harness
+instead of terminating during `require`:
+
+```lua
+-- hammerspoon/core.lua
+return {}
+```
+
 ```lua
 -- hammerspoon/tests/test_helper.lua
 local M = { tests = {} }
@@ -150,7 +158,9 @@ end)
 
 Run: `lua hammerspoon/tests/run.lua`
 
-Expected: FAIL containing `module 'core' not found`.
+Expected: the harness prints `FAIL` entries containing
+`attempt to call a nil value`; the module loads, but none of the required
+parser behavior exists yet.
 
 - [ ] **Step 4: Implement the minimal pure parsers**
 
