@@ -9,7 +9,8 @@ return {
         bwhash = 6, editsheets = 6, utility = 6, diagnostic = 0,
     },
     icons = {
-        command = "command", note = "info", prompt = "text", link = "link",
-        app = "application", utility = "settings", diagnostic = "caution",
+        command = "NSActionTemplate", note = "NSInfo", prompt = "NSBookmarksTemplate",
+        link = "NSShareTemplate", app = "NSApplicationIcon", utility = "NSAdvanced",
+        diagnostic = "NSCaution",
     },
 }

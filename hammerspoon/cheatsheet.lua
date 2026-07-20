@@ -32,13 +32,25 @@ local function utility(kind, text, subText, icons)
 end
 
 function M.hammerspoonAdapter(hsApi)
-    local adapter = { configDir = hsApi.configdir }
+    local adapter = { configDir = hsApi.configdir, activeTasks = {} }
     local log = hsApi.logger.new("cheatsheet")
     local imageCache = {}
     local chooserCallback
     local chooser = hsApi.chooser.new(function(choice)
         if choice and chooserCallback then chooserCallback(choice._record or choice) end
     end)
+
+    local function nonEmpty(value, fallback)
+        return value and value ~= "" and value or fallback
+    end
+
+    local function matchesSearch(record, query)
+        local haystack = (record.searchText or ((record.text or "") .. " " .. (record.subText or ""))):lower()
+        for token in (query or ""):lower():gmatch("%S+") do
+            if not haystack:find(token, 1, true) then return false end
+        end
+        return true
+    end
 
     function adapter:realpath(path)
         return hsApi.fs.pathToAbsolute(path)
@@ -81,25 +93,33 @@ function M.hammerspoonAdapter(hsApi)
     end
 
     function adapter:showChooser(records, callback)
-        local rows = {}
-        for _, record in ipairs(records) do
-            local icon
-            if record.image then
-                if imageCache[record.image] == nil then
-                    imageCache[record.image] = hsApi.image.imageFromName(record.image)
-                        or hsApi.image.imageFromName("NSAdvanced") or false
+        local function rowsFor(query)
+            local rows = {}
+            for _, record in ipairs(records) do
+                if matchesSearch(record, query) then
+                    local icon
+                    if record.image then
+                        if imageCache[record.image] == nil then
+                            imageCache[record.image] = hsApi.image.imageFromName(record.image)
+                                or hsApi.image.imageFromName("NSAdvanced") or false
+                        end
+                        icon = imageCache[record.image] or nil
+                    end
+                    table.insert(rows, {
+                        text = record.text,
+                        subText = record.subText,
+                        image = icon,
+                        _record = record,
+                    })
                 end
-                icon = imageCache[record.image] or nil
             end
-            table.insert(rows, {
-                text = record.text,
-                subText = record.subText,
-                image = icon,
-                _record = record,
-            })
+            return rows
         end
         chooserCallback = callback
-        chooser:choices(rows)
+        chooser:queryChangedCallback(function(query)
+            chooser:choices(rowsFor(query))
+        end)
+        chooser:choices(rowsFor(""))
         chooser:show()
     end
 
@@ -157,28 +177,40 @@ function M.hammerspoonAdapter(hsApi)
         if not ok then return callback(false, detail or "dialog cancelled") end
         if input == nil or input == "" then return callback(false, "no input supplied") end
 
-        local task = hsApi.task.new("/usr/bin/shasum", function(exitCode, stdOut, stdErr)
+        local task
+        task = hsApi.task.new("/usr/bin/shasum", function(exitCode, stdOut, stdErr)
+            adapter.activeTasks[task] = nil
             local hash = stdOut and stdOut:match("^(%x+)")
             if exitCode ~= 0 or not hash or #hash ~= 64 then
-                return callback(false, stdErr or "shasum failed")
+                return callback(false, nonEmpty(stdErr, "shasum failed"))
             end
             local copied = hsApi.pasteboard.setContents(hash)
             callback(copied, copied and nil or "pasteboard rejected hash")
         end, { "-a", "256" })
         if not task then return callback(false, "shasum task could not be created") end
         task:setInput(input)
-        if not task:start() then callback(false, "shasum could not start") end
+        adapter.activeTasks[task] = true
+        if not task:start() then
+            adapter.activeTasks[task] = nil
+            callback(false, "shasum could not start")
+        end
     end
 
     function adapter:editSheets(root, terminal, editor, callback)
-        local task = hsApi.task.new("/usr/bin/open", function(exitCode, _, stdErr)
-            callback(exitCode == 0, exitCode == 0 and nil or (stdErr or "editor launch failed"))
+        local task
+        task = hsApi.task.new("/usr/bin/open", function(exitCode, _, stdErr)
+            adapter.activeTasks[task] = nil
+            callback(exitCode == 0, exitCode == 0 and nil or nonEmpty(stdErr, "editor launch failed"))
         end, {
             "-na", terminal, "--args", "--working-directory=" .. root,
             "-e", editor, ".",
         })
         if not task then return callback(false, "editor task could not be created") end
-        if not task:start() then callback(false, "editor launch could not start") end
+        adapter.activeTasks[task] = true
+        if not task:start() then
+            adapter.activeTasks[task] = nil
+            callback(false, "editor launch could not start")
+        end
     end
 
     function adapter:modifiers()
@@ -301,6 +333,7 @@ function Controller:reportFailure(action, detail)
 end
 
 function Controller:perform(record, modifiers)
+    -- true means the action was accepted/dispatched; asynchronous completion is reported by its callback.
     modifiers = modifiers or {}
     if not record or not record.kind then
         return self:reportFailure("Action", "invalid record")

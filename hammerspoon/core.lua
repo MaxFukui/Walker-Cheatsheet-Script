@@ -19,7 +19,7 @@ end
 
 local function firstHeader(content)
     for _, line in ipairs(lines(content)) do
-        local title = line:match("^#+%s+(.+)$")
+        local title = trim(line):match("^#+%s+(.+)$")
         if title then return trim(title) end
     end
 end
@@ -28,20 +28,23 @@ function M.parseSheet(content, source)
     local result = { title = firstHeader(content), entries = {}, diagnostics = {} }
     local section
     for number, line in ipairs(lines(content)) do
-        local hashes, heading = line:match("^(#+)%s+(.+)$")
+        local trimmed = trim(line)
+        local hashes, heading = trimmed:match("^(#+)%s+(.+)$")
         if hashes then
             if #hashes >= 2 then section = trim(heading) end
-        elseif trim(line) ~= "" then
-            local note = line:match("^~%s*(.*)$")
-            local separator = line:find("|", 1, true)
+        elseif trimmed ~= "" then
+            local note = trimmed:match("^~%s*(.*)$")
+            local separator = trimmed:find("|", 1, true)
             if note then
                 note = trim(note)
                 if note ~= "" then
                     table.insert(result.entries, { kind = "note", text = note, section = section })
+                else
+                    diagnostic(result.diagnostics, source, number, "note requires text")
                 end
             elseif separator then
-                local description = trim(line:sub(1, separator - 1))
-                local value = trim(line:sub(separator + 1))
+                local description = trim(trimmed:sub(1, separator - 1))
+                local value = trim(trimmed:sub(separator + 1))
                 if description ~= "" and value ~= "" then
                     table.insert(result.entries, {
                         kind = "command", description = description, value = value, section = section,
@@ -78,8 +81,9 @@ end
 local function parseDelimited(content, source, consume)
     local result = { entries = {}, diagnostics = {} }
     for number, line in ipairs(lines(content)) do
-        if trim(line) ~= "" and not line:match("^#") then
-            local parts = splitPipe(line)
+        local trimmed = trim(line)
+        if trimmed ~= "" and not trimmed:match("^#") then
+            local parts = splitPipe(trimmed)
             local entry, message = consume(parts)
             if entry then
                 table.insert(result.entries, entry)
@@ -130,6 +134,7 @@ end
 
 function M.sheetRecords(parsed, source, icons)
     local records = {}
+    if not parsed.title or parsed.title == "" then return records end
     for _, entry in ipairs(parsed.entries) do
         local location = parsed.title .. (entry.section and " › " .. entry.section or "")
         if entry.kind == "command" then

@@ -101,6 +101,8 @@ luac -p hammerspoon/*.lua hammerspoon/tests/*.lua
 - [ ] From a clone outside `~/Development`, confirm `~/.hammerspoon` resolves to
   the clone and the palette loads its repository content.
 - [ ] Search in one palette and find a sheet command, prompt, link, and app.
+- [ ] Confirm command, note, prompt, link, app, utility, and diagnostic rows show
+  distinct macOS system icons (icon availability is a live AppKit smoke check).
 - [ ] Choose a command and a prompt; confirm each copies the expected content and
   its notification does not expose that content.
 - [ ] Choose a link and confirm it opens in the current default browser.
