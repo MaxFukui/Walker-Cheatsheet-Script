@@ -12,22 +12,41 @@ local function append(target, values)
     for _, value in ipairs(values) do table.insert(target, value) end
 end
 
-local function typeRanks(config)
-    local ranks = {}
-    for key, value in pairs(config.typeOrder or {}) do
-        if type(key) == "number" then
-            ranks[value] = key
-        else
-            ranks[key] = value
-        end
-    end
-    return ranks
-end
-
 local function utility(kind, text, subText, icons)
     return {
         kind = kind, text = text, subText = subText, source = "",
-        searchText = ("utility " .. text):lower(), image = icons.utility,
+        searchText = ("utility " .. text):lower(), image = icons[kind],
+    }
+end
+
+local function action(record)
+    record.role = "action"
+    return record
+end
+
+local function navigation(kind, text, subText, placeholder, children, image)
+    return {
+        role = "navigation", kind = kind, text = text, subText = subText,
+        placeholder = placeholder, children = children, image = image,
+        searchText = string.lower(table.concat({ kind, text, subText or "" }, " ")),
+    }
+end
+
+local function diagnosticNode(count, icons)
+    return action({
+        kind = "diagnostic", text = "Configuration needs attention",
+        subText = string.format("%d diagnostic%s · See Hammerspoon logs", count,
+            count == 1 and "" or "s"),
+        source = "", searchText = "diagnostic configuration attention",
+        image = icons.diagnostic,
+    })
+end
+
+local function emptyNode(label, icons)
+    return {
+        role = "empty", kind = "empty", text = "No " .. label .. " found",
+        subText = "Add content to the repository", source = "",
+        searchText = ("empty no " .. label):lower(), image = icons.empty,
     }
 end
 
@@ -246,87 +265,117 @@ function M.new(adapter, config)
     }, Controller)
 end
 
-function Controller:buildIndex()
-    local records, diagnostics = {}, {}
+function Controller:buildNavigation()
+    local diagnostics = {}
     local icons = self.config.icons or {}
-    local sources = {
-        {
-            directory = self.root .. "/sheets",
-            parse = function(content, source) return core.parseSheet(content, source) end,
-            records = core.sheetRecords,
-        },
-        {
-            directory = self.root .. "/prompts",
-            parse = function(content, source, path) return core.parsePrompt(content, basename(path), source) end,
-            records = function(parsed, source, configuredIcons)
-                return { core.promptRecord(parsed, source, configuredIcons) }
-            end,
-        },
-        {
-            directory = self.root .. "/links",
-            parse = function(content, source) return core.parseLinks(content, source) end,
-            records = core.linkRecords,
-        },
-        {
-            directory = self.root .. "/hammerspoon/apps",
-            parse = function(content, source) return core.parseApps(content, source) end,
-            records = core.appRecords,
-        },
-    }
+    local home, sheetFiles, prompts, linkFiles, apps = {}, {}, {}, {}, {}
 
-    for _, sourceType in ipairs(sources) do
-        local files, listError = self.adapter:listRegularFiles(sourceType.directory)
+    local function load(directory, consume)
+        local affected = {}
+        local files, listError = self.adapter:listRegularFiles(directory)
         if not files then
-            table.insert(diagnostics, {
-                source = sourceType.directory, line = 1,
+            local item = {
+                source = directory, line = 1,
                 message = "required directory unavailable" .. (listError and ": " .. listError or ""),
-            })
+            }
+            table.insert(diagnostics, item)
+            table.insert(affected, item)
         else
             for _, path in ipairs(files) do
                 local content, readError = self.adapter:readFile(path)
                 if content == nil then
-                    table.insert(diagnostics, {
+                    local item = {
                         source = path, line = 1,
                         message = "file is unreadable" .. (readError and ": " .. readError or ""),
-                    })
+                    }
+                    table.insert(diagnostics, item)
+                    table.insert(affected, item)
                 else
-                    local parsed = sourceType.parse(content, path, path)
+                    local parsed = consume(content, path)
                     append(diagnostics, parsed.diagnostics)
-                    append(records, sourceType.records(parsed, path, icons))
+                    append(affected, parsed.diagnostics)
                 end
             end
         end
+        return affected
     end
 
-    table.insert(records, utility("bwhash", "BW Hash", "Utility · Copy SHA-256 hash", icons))
-    table.insert(records, utility("editsheets", "Edit Sheets", "Utility · Open repository", icons))
-
-    local ranks = typeRanks(self.config)
-    table.sort(records, function(left, right)
-        local leftRank = ranks[left.kind] or ranks.utility or math.huge
-        local rightRank = ranks[right.kind] or ranks.utility or math.huge
-        if leftRank ~= rightRank then return leftRank < rightRank end
-        if (left.source or "") ~= (right.source or "") then
-            return (left.source or "") < (right.source or "")
+    local sheetDiagnostics = load(self.root .. "/sheets", function(content, path)
+        local parsed = core.parseSheet(content, path)
+        local children = core.sheetRecords(parsed, path, icons)
+        for index, record in ipairs(children) do children[index] = action(record) end
+        if parsed.title and parsed.title ~= "" then
+            if #children == 0 then table.insert(children, emptyNode("commands", icons)) end
+            table.insert(sheetFiles, navigation("sheet", parsed.title, basename(path),
+                "Search " .. parsed.title .. " commands", children, icons.sheet))
         end
-        return (left.text or "") < (right.text or "")
+        return parsed
+    end)
+    if #sheetDiagnostics > 0 then table.insert(sheetFiles, 1, diagnosticNode(#sheetDiagnostics, icons)) end
+    if #sheetFiles == 0 then table.insert(sheetFiles, emptyNode("cheatsheets", icons)) end
+
+    local promptDiagnostics = load(self.root .. "/prompts", function(content, path)
+        local parsed = core.parsePrompt(content, basename(path), path)
+        table.insert(prompts, action(core.promptRecord(parsed, path, icons)))
+        return parsed
+    end)
+    if #promptDiagnostics > 0 then table.insert(prompts, 1, diagnosticNode(#promptDiagnostics, icons)) end
+    if #prompts == 0 then table.insert(prompts, emptyNode("prompts", icons)) end
+
+    local linkDiagnostics = load(self.root .. "/links", function(content, path)
+        local parsed = core.parseLinks(content, path)
+        local children = core.linkRecords(parsed, path, icons)
+        for index, record in ipairs(children) do children[index] = action(record) end
+        if #children == 0 then table.insert(children, emptyNode("links", icons)) end
+        local label = parsed.title or basename(path)
+        table.insert(linkFiles, navigation("linkfile", label, basename(path),
+            "Search " .. label .. " links", children, icons.link))
+        return parsed
+    end)
+    if #linkDiagnostics > 0 then table.insert(linkFiles, 1, diagnosticNode(#linkDiagnostics, icons)) end
+    if #linkFiles == 0 then table.insert(linkFiles, emptyNode("link collections", icons)) end
+
+    local appDiagnostics = load(self.root .. "/hammerspoon/apps", function(content, path)
+        local parsed = core.parseApps(content, path)
+        local records = core.appRecords(parsed, path, icons)
+        for _, record in ipairs(records) do table.insert(apps, action(record)) end
+        return parsed
     end)
 
-    if #diagnostics > 0 then
-        for _, item in ipairs(diagnostics) do
-            self.adapter:log(string.format("%s:%s: %s", item.source, item.line or 1, item.message))
-        end
-        table.insert(records, 1, {
-            kind = "diagnostic",
-            text = "Configuration needs attention",
-            subText = string.format("%d diagnostic%s · See Hammerspoon logs", #diagnostics,
-                #diagnostics == 1 and "" or "s"),
-            source = "", searchText = "diagnostic configuration attention",
-            image = icons.diagnostic,
-        })
-    end
+    table.insert(home, navigation("sheets", "Cheatsheets", "Browse command sheets",
+        "Choose a cheatsheet", sheetFiles, icons.sheets))
+    table.insert(home, navigation("prompts", "Prompts", "Copy a saved prompt",
+        "Choose a prompt", prompts, icons.prompts))
+    table.insert(home, navigation("links", "Links", "Browse saved links",
+        "Choose a link collection", linkFiles, icons.links))
+    if #appDiagnostics > 0 then table.insert(home, diagnosticNode(#appDiagnostics, icons)) end
+    append(home, apps)
+    table.insert(home, action(utility("bwhash", "BW Hash", "Utility · Copy SHA-256 hash", icons)))
+    table.insert(home, action(utility("editsheets", "Edit Sheets", "Utility · Open repository", icons)))
 
-    return { records = records, diagnostics = diagnostics }
+    for _, item in ipairs(diagnostics) do
+        self.adapter:log(string.format("%s:%s: %s", item.source, item.line or 1, item.message))
+    end
+    return { home = home, diagnostics = diagnostics }
+end
+
+function Controller:buildIndex()
+    local tree = self:buildNavigation()
+    local records = {}
+    local function flatten(nodes)
+        for _, node in ipairs(nodes) do
+            if node.role == "navigation" then
+                flatten(node.children or {})
+            elseif node.role == "action" and node.kind ~= "diagnostic" then
+                table.insert(records, node)
+            end
+        end
+    end
+    flatten(tree.home)
+    if #tree.diagnostics > 0 then
+        table.insert(records, 1, diagnosticNode(#tree.diagnostics, self.config.icons or {}))
+    end
+    return { records = records, diagnostics = tree.diagnostics }
 end
 
 function Controller:show()

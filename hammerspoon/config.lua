@@ -9,8 +9,12 @@ return {
         bwhash = 6, editsheets = 6, utility = 6, diagnostic = 0,
     },
     icons = {
-        command = "NSActionTemplate", note = "NSInfo", prompt = "NSBookmarksTemplate",
-        link = "NSShareTemplate", app = "NSApplicationIcon", utility = "NSAdvanced",
-        diagnostic = "NSCaution",
+        sheets = "NSListViewTemplate", sheet = "NSBookmarksTemplate",
+        prompts = "NSFontPanel", prompt = "NSMultipleDocuments",
+        links = "NSNetwork", link = "NSShareTemplate",
+        app = "NSApplicationIcon", bwhash = "NSLockLockedTemplate",
+        editsheets = "NSTouchBarComposeTemplate", back = "NSGoLeftTemplate",
+        command = "NSActionTemplate", note = "NSInfo",
+        diagnostic = "NSCaution", empty = "NSStopProgressTemplate",
     },
 }

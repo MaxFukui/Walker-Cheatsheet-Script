@@ -96,12 +96,14 @@ local function parseDelimited(content, source, consume)
 end
 
 function M.parseLinks(content, source)
-    return parseDelimited(content, source, function(parts)
+    local result = parseDelimited(content, source, function(parts)
         if #parts ~= 2 or parts[1] == "" or parts[2] == "" then
             return nil, "link record requires name and URL"
         end
         return { kind = "link", name = parts[1], url = parts[2] }
     end)
+    result.title = firstHeader(content)
+    return result
 end
 
 function M.parseApps(content, source)

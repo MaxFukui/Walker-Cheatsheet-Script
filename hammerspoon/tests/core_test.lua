@@ -32,6 +32,11 @@ t.test("links reject malformed records", function()
     t.equal(parsed.diagnostics[1].line, 3)
 end)
 
+t.test("link parser exposes its collection heading", function()
+    local parsed = core.parseLinks("# Quick Links\nGitHub | https://github.com\n", "links/general.md")
+    t.equal(parsed.title, "Quick Links")
+end)
+
 t.test("apps default to new and reject unknown modes", function()
     local parsed = core.parseApps(
         "# Apps\nFirefox | Firefox\nMail | Mail | focus\nBad | Bad | other\n",

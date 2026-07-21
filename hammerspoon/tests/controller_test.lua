@@ -15,6 +15,26 @@ function Fake.new(options)
     }, Fake)
 end
 
+function Fake.completeRepository()
+    return Fake.new({
+        files = {
+            ["/repo/sheets/docker.md"] = "# Docker\nList | docker ps\n",
+            ["/repo/sheets/git.md"] = "# Git\n## Branches\nCreate | git switch -c <name>\n",
+            ["/repo/prompts/dev.md"] = "# Developer\nBody",
+            ["/repo/links/general.md"] = "# Quick Links\nGitHub | https://github.com\n",
+            ["/repo/links/work.md"] = "# Work\nDocs | https://example.com/docs\n",
+            ["/repo/hammerspoon/apps/general.md"] = "Firefox | Firefox\n",
+        },
+    })
+end
+
+function Fake.findHome(fake, kind)
+    local home = fake.screens[1].records
+    for _, node in ipairs(home) do
+        if node.kind == kind then return node end
+    end
+end
+
 function Fake:realpath(path)
     return path
 end
@@ -89,6 +109,46 @@ function Fake:editSheets(root, terminal, editor, callback)
     self.editRequest = { root = root, terminal = terminal, editor = editor }
     if self.failures.editSheets then callback(false, "editor task failed") else callback(true) end
 end
+
+t.test("home keeps categories first and apps utilities immediate", function()
+    local fake = Fake.completeRepository()
+    local tree = cheatsheet.new(fake, config):buildNavigation()
+    t.equal(tree.home[1].text, "Cheatsheets")
+    t.equal(tree.home[2].text, "Prompts")
+    t.equal(tree.home[3].text, "Links")
+    t.equal(tree.home[4].kind, "app")
+    t.equal(tree.home[#tree.home - 1].kind, "bwhash")
+    t.equal(tree.home[#tree.home].kind, "editsheets")
+end)
+
+t.test("edit utility uses the verified compose system image", function()
+    t.equal(config.icons.editsheets, "NSTouchBarComposeTemplate")
+end)
+
+t.test("cheatsheets and links drill through source files", function()
+    local tree = cheatsheet.new(Fake.completeRepository(), config):buildNavigation()
+    local sheets = tree.home[1]
+    t.equal(#sheets.children, 2)
+    t.equal(sheets.children[1].role, "navigation")
+    t.equal(sheets.children[1].text, "Docker")
+    t.equal(sheets.children[1].children[1].kind, "command")
+    t.equal(sheets.children[1].children[1].payload, "docker ps")
+    t.equal(sheets.children[2].text, "Git")
+    t.equal(sheets.children[2].children[1].payload, "git switch -c <name>")
+    local links = tree.home[3]
+    t.equal(#links.children, 2)
+    t.equal(links.children[1].text, "Quick Links")
+    t.equal(links.children[1].children[1].kind, "link")
+    t.equal(links.children[1].children[1].payload, "https://github.com")
+    t.equal(links.children[2].text, "Work")
+    t.equal(links.children[2].children[1].payload, "https://example.com/docs")
+end)
+
+t.test("prompts are direct child actions", function()
+    local tree = cheatsheet.new(Fake.completeRepository(), config):buildNavigation()
+    t.equal(tree.home[2].children[1].kind, "prompt")
+    t.equal(tree.home[2].children[1].role, "action")
+end)
 
 t.test("controller derives adjacent shared directories and indexes regular files", function()
     local fake = Fake.new({
