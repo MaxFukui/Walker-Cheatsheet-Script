@@ -397,7 +397,9 @@ function Controller:display(node, includeBack)
 end
 
 function Controller:select(node, modifiers)
-    if node.kind == "back" then
+    if node.role == "empty" or node.kind == "empty" then
+        return
+    elseif node.kind == "back" then
         table.remove(self.navigationStack)
         local parent = self.navigationStack[#self.navigationStack]
         return parent and self:display(parent, true) or self:openHome()

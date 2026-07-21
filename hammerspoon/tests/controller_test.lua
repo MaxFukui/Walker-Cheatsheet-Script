@@ -303,6 +303,27 @@ t.test("home app and utility records perform immediately", function()
     t.equal(fake.hashDialogCalls, 1)
 end)
 
+t.test("empty-state selections are non-actionable and preserve the current screen", function()
+    local fake = Fake.new()
+    local controller = cheatsheet.new(fake, config)
+    controller:show()
+    controller:select(fake.screens[1].records[1], {})
+    local screen = fake.screens[2]
+    t.equal(screen.records[2].kind, "empty")
+
+    controller:select(screen.records[2], {})
+
+    t.equal(#fake.screens, 2)
+    t.equal(#fake.notifications, 0)
+    t.equal(#fake.logs, 0)
+    t.equal(fake.clipboard, nil)
+    t.equal(fake.openedURL, nil)
+    t.equal(fake.focusTarget, nil)
+    t.equal(fake.newWindowTarget, nil)
+    t.equal(fake.hashDialogCalls, nil)
+    t.equal(fake.editRequest, nil)
+end)
+
 t.test("show rebuilds and presents home", function()
     local fake = Fake.new({ files = { ["/repo/prompts/dev.md"] = "# Developer\nBody" } })
     local controller = cheatsheet.new(fake, config)
