@@ -93,7 +93,7 @@ Edit `hammerspoon/config.lua` and reload Hammerspoon. It contains:
 - new-window retry interval and timeout
 - result type ordering
 - semantic category and action icons, specified as AppKit system image names;
-  unavailable images use the configured safe fallback
+  unavailable images use the hard-coded `NSAdvanced` fallback
 
 Repository content remains in `sheets/`, `prompts/`, `links/`, and
 `hammerspoon/apps/`. Because the configuration resolves paths from the symlink's
