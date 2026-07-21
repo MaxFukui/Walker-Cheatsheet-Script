@@ -121,36 +121,38 @@ function M.hammerspoonAdapter(hsApi)
         hsApi.notify.new({ title = title, informativeText = message }):send()
     end
 
-    function adapter:showChooser(records, callback)
-        local function rowsFor(query)
-            local rows = {}
-            for _, record in ipairs(records) do
-                if matchesSearch(record, query) then
-                    local icon
-                    if record.image then
-                        if imageCache[record.image] == nil then
-                            imageCache[record.image] = hsApi.image.imageFromName(record.image)
-                                or hsApi.image.imageFromName("NSAdvanced") or false
-                        end
-                        icon = imageCache[record.image] or nil
+    local function rowsFor(records, query)
+        local rows = {}
+        for _, record in ipairs(records) do
+            if matchesSearch(record, query) then
+                local icon
+                if record.image then
+                    if imageCache[record.image] == nil then
+                        imageCache[record.image] = hsApi.image.imageFromName(record.image)
+                            or hsApi.image.imageFromName("NSAdvanced") or false
                     end
-                    table.insert(rows, {
-                        text = record.text,
-                        subText = record.subText,
-                        image = icon,
-                        _record = record,
-                    })
+                    icon = imageCache[record.image] or nil
                 end
+                table.insert(rows, {
+                    text = record.text,
+                    subText = record.subText,
+                    image = icon,
+                    _record = record,
+                })
             end
-            return rows
         end
+        return rows
+    end
+
+    function adapter:showChooser(screen, callback)
+        local records = screen.records or {}
         chooserCallback = callback
         chooser:queryChangedCallback(function(query)
-            chooser:choices(rowsFor(query))
+            chooser:choices(rowsFor(records, query))
         end)
-        -- Setting the field does not invoke queryChangedCallback; reset stale state before repopulating.
+        chooser:placeholderText(screen.placeholder or "Cheatsheet")
         chooser:query("")
-        chooser:choices(rowsFor(""))
+        chooser:choices(rowsFor(records, ""))
         chooser:show()
     end
 
@@ -262,6 +264,7 @@ function M.new(adapter, config)
         adapter = adapter,
         config = config,
         root = adapter:parent(configPath),
+        navigationStack = {},
     }, Controller)
 end
 
@@ -378,11 +381,41 @@ function Controller:buildIndex()
     return { records = records, diagnostics = tree.diagnostics }
 end
 
-function Controller:show()
-    local result = self:buildIndex()
-    self.adapter:showChooser(result.records, function(choice)
-        if choice and self.perform then self:perform(choice, self.adapter:modifiers()) end
+function Controller:display(node, includeBack)
+    local records = {}
+    if includeBack then
+        table.insert(records, {
+            role = "navigation", kind = "back", text = "← Back",
+            subText = "Return to the previous menu", searchText = "back return previous",
+            image = self.config.icons.back,
+        })
+    end
+    append(records, node.children or {})
+    self.adapter:showChooser({ records = records, placeholder = node.placeholder }, function(choice)
+        self:select(choice, self.adapter:modifiers())
     end)
+end
+
+function Controller:select(node, modifiers)
+    if node.kind == "back" then
+        table.remove(self.navigationStack)
+        local parent = self.navigationStack[#self.navigationStack]
+        return parent and self:display(parent, true) or self:openHome()
+    elseif node.role == "navigation" then
+        table.insert(self.navigationStack, node)
+        return self:display(node, true)
+    end
+    return self:perform(node, modifiers)
+end
+
+function Controller:openHome()
+    local tree = self:buildNavigation()
+    self.navigationStack = {}
+    return self:display({ children = tree.home, placeholder = "Cheatsheet" }, false)
+end
+
+function Controller:show()
+    return self:openHome()
 end
 
 function Controller:reportFailure(action, detail)

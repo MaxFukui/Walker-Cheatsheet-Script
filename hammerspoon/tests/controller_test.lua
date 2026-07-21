@@ -10,7 +10,7 @@ function Fake.new(options)
     return setmetatable({
         configDir = options.configDir or "/repo/hammerspoon",
         files = options.files or {}, missing = options.missing or {}, unreadable = options.unreadable or {},
-        failures = options.failures or {}, logs = {}, chooserCalls = {}, notifications = {},
+        failures = options.failures or {}, logs = {}, screens = {}, notifications = {},
         untargetedKeystrokes = 0,
     }, Fake)
 end
@@ -56,8 +56,20 @@ function Fake:log(message)
     table.insert(self.logs, message)
 end
 
-function Fake:showChooser(records, callback)
-    table.insert(self.chooserCalls, { records = records, callback = callback })
+function Fake:showChooser(screen, callback)
+    table.insert(self.screens, {
+        records = screen.records, placeholder = screen.placeholder, callback = callback,
+    })
+end
+
+function Fake:modifiers()
+    return self.currentModifiers or {}
+end
+
+function Fake.findHome(fake, kind)
+    for _, record in ipairs(fake.screens[1].records) do
+        if record.kind == kind then return record end
+    end
 end
 
 function Fake:setPasteboard(value)
@@ -94,6 +106,7 @@ function Fake:openNewWindow(appName, retryInterval, timeout, callback)
 end
 
 function Fake:runHashDialog(callback)
+    self.hashDialogCalls = (self.hashDialogCalls or 0) + 1
     self.hashDialogOpened = true
     if self.failures.runHashDialog then callback(false, "hash task failed") else callback(true) end
 end
@@ -256,12 +269,46 @@ t.test("unreadable files are diagnosed with their source", function()
     t.truthy(fake.logs[1]:find(":1:", 1, true))
 end)
 
-t.test("show rebuilds and presents the unified index", function()
+t.test("show opens home and navigation selections replace the screen", function()
+    local fake = Fake.completeRepository()
+    local controller = cheatsheet.new(fake, config)
+    controller:show()
+    t.equal(fake.screens[1].placeholder, "Cheatsheet")
+    controller:select(fake.screens[1].records[1], {})
+    t.equal(fake.screens[2].placeholder, "Choose a cheatsheet")
+    controller:select(fake.screens[2].records[2], {})
+    t.truthy(fake.screens[3].placeholder:match("Search .+ commands"))
+end)
+
+t.test("back returns one level and global show resets home", function()
+    local fake = Fake.completeRepository()
+    local controller = cheatsheet.new(fake, config)
+    controller:show()
+    controller:select(fake.screens[1].records[1], {})
+    controller:select(fake.screens[2].records[2], {})
+    controller:select(fake.screens[3].records[1], {})
+    t.equal(fake.screens[4].placeholder, "Choose a cheatsheet")
+    controller:show()
+    t.equal(fake.screens[5].placeholder, "Cheatsheet")
+    t.equal(#controller.navigationStack, 0)
+end)
+
+t.test("home app and utility records perform immediately", function()
+    local fake = Fake.completeRepository()
+    local controller = cheatsheet.new(fake, config)
+    controller:show()
+    controller:select(Fake.findHome(fake, "app"), { cmd = true })
+    t.equal(fake.focusTarget, "Firefox")
+    controller:select(Fake.findHome(fake, "bwhash"), {})
+    t.equal(fake.hashDialogCalls, 1)
+end)
+
+t.test("show rebuilds and presents home", function()
     local fake = Fake.new({ files = { ["/repo/prompts/dev.md"] = "# Developer\nBody" } })
     local controller = cheatsheet.new(fake, config)
     controller:show()
-    t.equal(#fake.chooserCalls, 1)
-    t.equal(#fake.chooserCalls[1].records, 3)
+    t.equal(#fake.screens, 1)
+    t.equal(#fake.screens[1].records, 5)
 end)
 
 t.test("title-less sheets are diagnosed and skipped without crashing index build", function()

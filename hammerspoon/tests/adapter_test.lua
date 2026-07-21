@@ -13,6 +13,7 @@ local function fakeHs()
     function chooser:rows() return self end
     function chooser:choices(rows) table.insert(self.choiceSets, rows); return self end
     function chooser:show() return self end
+    function chooser:placeholderText(value) self.placeholder = value; return self end
     function chooser:queryChangedCallback(fn) self.queryCallback = fn; return self end
     function chooser:query(value)
         if value == nil then return self.queryValue end
@@ -37,10 +38,10 @@ t.test("chooser filters unified metadata while preserving readable rows", functi
     local hs = fakeHs()
     hs.image.imageFromName = function(name) return "image:" .. name end
     local adapter = cheatsheet.hammerspoonAdapter(hs)
-    adapter:showChooser({
+    adapter:showChooser({ placeholder = "Cheatsheet", records = {
         { text = "Create", subText = "Git › Branches · Copy command", searchText = "git branches create git branch -c command" },
         { text = "Firefox", subText = "App · Open new window", searchText = "app browser firefox new" },
-    }, function() end)
+    } }, function() end)
     local chooser = hs.chooser.new()
     chooser.queryCallback("git branch")
     t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
@@ -54,10 +55,10 @@ end)
 t.test("chooser fuzzy-matches every query token as a case-insensitive subsequence", function()
     local hs = fakeHs()
     local adapter = cheatsheet.hammerspoonAdapter(hs)
-    adapter:showChooser({
+    adapter:showChooser({ records = {
         { text = "Create branch", subText = "Git › Branches", searchText = "git branches create git switch -c command" },
         { text = "Status", subText = "Git", searchText = "git status command" },
-    }, function() end)
+    } }, function() end)
     local chooser = hs.chooser.new()
     chooser.queryCallback("G brnch")
     t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
@@ -73,13 +74,13 @@ t.test("each chooser opening clears stale query before restoring all choices", f
     local hs = fakeHs()
     local adapter = cheatsheet.hammerspoonAdapter(hs)
     local records = { { text = "Status", subText = "Git", searchText = "git status" } }
-    adapter:showChooser(records, function() end)
+    adapter:showChooser({ records = records }, function() end)
     local chooser = hs.chooser.new()
     t.equal(chooser.queryValue, "")
     t.equal(chooser.querySetCalls, 1)
     t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
     chooser.queryValue = "another stale query"
-    adapter:showChooser(records, function() end)
+    adapter:showChooser({ records = records }, function() end)
     t.equal(chooser.queryValue, "")
     t.equal(chooser.querySetCalls, 2)
     t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
@@ -102,13 +103,41 @@ t.test("configured icons request distinct documented system image names with saf
         seen[name] = true
         table.insert(records, { kind = kind, text = kind, subText = kind, image = name })
     end
-    adapter:showChooser(records, function() end)
+    adapter:showChooser({ records = records }, function() end)
     for _, name in pairs(config.icons) do
         local found = false
         for _, requestedName in ipairs(requested) do if requestedName == name then found = true end end
         t.truthy(found, "must request " .. name)
     end
     t.truthy(#requested > #records, "missing icons must request fallback")
+end)
+
+t.test("adapter renders only the current screen and its placeholder", function()
+    local hs = fakeHs()
+    hs.image.imageFromName = function(name) return "image:" .. name end
+    local adapter = cheatsheet.hammerspoonAdapter(hs)
+    adapter:showChooser({
+        placeholder = "Choose a cheatsheet",
+        records = {
+            { text = "Back", searchText = "back", image = "NSGoLeftTemplate" },
+            { text = "Git", searchText = "git", image = "NSBookmarksTemplate" },
+        },
+    }, function() end)
+    local chooser = hs.chooser.new()
+    t.equal(chooser.placeholder, "Choose a cheatsheet")
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 2)
+    t.equal(chooser.choiceSets[#chooser.choiceSets][1].image, "image:NSGoLeftTemplate")
+    chooser.queryCallback("docker")
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 0)
+
+    adapter:showChooser({ placeholder = "Commands", records = {
+        { text = "Docker", searchText = "docker" },
+    } }, function() end)
+    t.equal(chooser.queryValue, "")
+    chooser.queryCallback("git")
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 0)
+    chooser.queryCallback("dckr")
+    t.equal(#chooser.choiceSets[#chooser.choiceSets], 1)
 end)
 
 t.test("Hammerspoon adapter exposes the controller interface", function()
