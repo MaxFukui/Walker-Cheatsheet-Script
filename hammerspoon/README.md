@@ -1,8 +1,9 @@
 # Cheatsheet for Hammerspoon (macOS)
 
-This Hammerspoon configuration provides one searchable palette for the repository's
-sheet commands and notes, prompts, links, apps, and utilities. Commands and prompts
-are copied only; they are never typed or executed by the launcher.
+The home menu keeps apps and utilities immediately available while grouping
+repository content under Cheatsheets, Prompts, and Links. Search applies only
+to the menu currently on screen. Commands and prompts are copied only; they are
+never typed or executed by the launcher.
 
 ## Install
 
@@ -33,9 +34,19 @@ separately before terminal commands such as `hs -c 'hs.reload()'` will work.
 
 ## Use
 
-Press `Alt+Ctrl+Shift+K` to open the palette. Search all content in the same
-chooser: sheet commands and notes, prompts, links, apps, **BW Hash**, and **Edit
-Sheets**.
+Press `Alt+Ctrl+Shift+K` to open the home menu. The home rows are **Cheatsheets**,
+**Prompts**, **Links**, configured apps, **BW Hash**, and **Edit Sheets**, in that
+order. Pressing the hotkey again always resets the chooser to this home menu,
+even if a nested menu was open.
+
+- **Cheatsheets** → choose a sheet → choose a command or note.
+- **Prompts** → choose a prompt to copy it directly.
+- **Links** → choose a link file → choose a link.
+- Every nested menu starts with **← Back**, which returns to the previous menu.
+- Search fuzzy-matches all query tokens within only the rows on the current
+  screen; it does not search across other categories or nested menus.
+- Apps, **BW Hash**, and **Edit Sheets** are selected directly from home and run
+  immediately rather than opening another menu.
 
 - Choosing a command copies only its command value. Choosing a prompt copies the
   full prompt file. Success notifications identify the item but do not reveal
@@ -81,7 +92,8 @@ Edit `hammerspoon/config.lua` and reload Hammerspoon. It contains:
 - terminal and editor names used by **Edit Sheets**
 - new-window retry interval and timeout
 - result type ordering
-- result icons
+- semantic category and action icons, specified as AppKit system image names;
+  unavailable images use the configured safe fallback
 
 Repository content remains in `sheets/`, `prompts/`, `links/`, and
 `hammerspoon/apps/`. Because the configuration resolves paths from the symlink's
@@ -99,21 +111,36 @@ luac -p hammerspoon/*.lua hammerspoon/tests/*.lua
 ## Manual smoke checklist
 
 - [ ] From a clone outside `~/Development`, confirm `~/.hammerspoon` resolves to
-  the clone and the palette loads its repository content.
-- [ ] Search in one palette and find a sheet command, prompt, link, and app.
-- [ ] Confirm command, note, prompt, link, app, utility, and diagnostic rows show
-  distinct macOS system icons (icon availability is a live AppKit smoke check).
-- [ ] Choose a command and a prompt; confirm each copies the expected content and
-  its notification does not expose that content.
-- [ ] Choose a link and confirm it opens in the current default browser.
-- [ ] Choose a `new` app with `Enter` and confirm a new window opens in that app.
-- [ ] Choose the same app with `Cmd+Enter` and confirm it focuses without opening
-  a new window.
-- [ ] Select an unavailable app and confirm failure does not send `Cmd+N` to any
-  other application.
+  the clone, reload Hammerspoon, and confirm the home menu loads its repository
+  content.
+- [ ] Confirm compact home ordering: **Cheatsheets**, **Prompts**, **Links**, apps,
+  **BW Hash**, then **Edit Sheets**.
+- [ ] Select an app, **BW Hash**, and **Edit Sheets** from home; confirm each acts
+  immediately without opening a submenu.
+- [ ] Follow **Cheatsheets** → sheet → command and note. Confirm the command copies
+  its exact value, the note displays, and notifications do not expose copied
+  content.
+- [ ] Follow **Links** → link file → link and confirm it opens in the current
+  default browser.
+- [ ] Follow **Prompts** → prompt and confirm the full prompt is copied while its
+  notification does not expose the content.
+- [ ] At every nested category, sheet, and link-file level, confirm **← Back** is
+  first and returns exactly one level.
+- [ ] Navigate into a nested menu, press `Alt+Ctrl+Shift+K`, and confirm the chooser
+  resets to home.
+- [ ] On each screen, confirm search excludes rows from other screens and
+  case-insensitively fuzzy-matches every query token as a subsequence.
+- [ ] Confirm categories, Back, commands, notes, prompts, links, apps, utilities,
+  diagnostics, and empty states use their semantic icons; temporarily configure
+  an unavailable system image name and confirm the safe fallback appears.
+- [ ] Choose a `new` app with `Enter` and confirm a new window opens in that app;
+  choose it with `Cmd+Enter` and confirm it only focuses. Confirm a `focus` app
+  only focuses, and an unavailable app never sends `Cmd+N` to another app.
 - [ ] Run **BW Hash** with known exact input and compare the clipboard with
   `printf %s 'same exact input' | shasum -a 256`.
 - [ ] Run **Edit Sheets** once with valid terminal/editor settings, then with an
-  invalid setting; confirm success and failure notifications respectively.
-- [ ] Temporarily make `sheets/` unavailable, reload, and confirm the chooser
-  presents **Configuration needs attention** while logs identify `sheets/`.
+  invalid setting; confirm the editor launch and the respective success/failure
+  notifications.
+- [ ] Temporarily make `sheets/` unavailable, reload, and confirm the relevant
+  menu presents **Configuration needs attention** while Hammerspoon logs identify
+  `sheets/`.
