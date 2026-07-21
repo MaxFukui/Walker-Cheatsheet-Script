@@ -342,13 +342,13 @@ function Controller:buildNavigation()
         return parsed
     end)
 
+    if #appDiagnostics > 0 then table.insert(home, diagnosticNode(#appDiagnostics, icons)) end
     table.insert(home, navigation("sheets", "Cheatsheets", "Browse command sheets",
         "Choose a cheatsheet", sheetFiles, icons.sheets))
     table.insert(home, navigation("prompts", "Prompts", "Copy a saved prompt",
         "Choose a prompt", prompts, icons.prompts))
     table.insert(home, navigation("links", "Links", "Browse saved links",
         "Choose a link collection", linkFiles, icons.links))
-    if #appDiagnostics > 0 then table.insert(home, diagnosticNode(#appDiagnostics, icons)) end
     append(home, apps)
     table.insert(home, action(utility("bwhash", "BW Hash", "Utility · Copy SHA-256 hash", icons)))
     table.insert(home, action(utility("editsheets", "Edit Sheets", "Utility · Open repository", icons)))

@@ -28,13 +28,6 @@ function Fake.completeRepository()
     })
 end
 
-function Fake.findHome(fake, kind)
-    local home = fake.screens[1].records
-    for _, node in ipairs(home) do
-        if node.kind == kind then return node end
-    end
-end
-
 function Fake:realpath(path)
     return path
 end
@@ -148,6 +141,83 @@ t.test("prompts are direct child actions", function()
     local tree = cheatsheet.new(Fake.completeRepository(), config):buildNavigation()
     t.equal(tree.home[2].children[1].kind, "prompt")
     t.equal(tree.home[2].children[1].role, "action")
+end)
+
+t.test("link collection falls back to its basename without a heading", function()
+    local fake = Fake.new({ files = {
+        ["/repo/links/general.md"] = "GitHub | https://github.com\n",
+    } })
+    local tree = cheatsheet.new(fake, config):buildNavigation()
+    t.equal(tree.home[3].children[1].text, "general.md")
+end)
+
+t.test("category diagnostics stay with sheets prompts and links", function()
+    local promptPath = "/repo/prompts/private.md"
+    local fake = Fake.new({
+        files = {
+            ["/repo/sheets/broken.md"] = "# Broken\nnot a record\n",
+            [promptPath] = "# Private\nBody",
+            ["/repo/links/broken.md"] = "# Broken\nnot a link\n",
+        },
+        unreadable = { [promptPath] = true },
+    })
+    local tree = cheatsheet.new(fake, config):buildNavigation()
+    t.equal(tree.home[1].kind, "sheets")
+    t.equal(tree.home[1].children[1].kind, "diagnostic")
+    t.equal(tree.home[2].kind, "prompts")
+    t.equal(tree.home[2].children[1].kind, "diagnostic")
+    t.equal(tree.home[3].kind, "links")
+    t.equal(tree.home[3].children[1].kind, "diagnostic")
+end)
+
+t.test("app diagnostics are prepended to home without changing relative home order", function()
+    local fake = Fake.new({ files = {
+        ["/repo/hammerspoon/apps/general.md"] =
+            "Broken | App | invalid\nFirefox | Firefox\n",
+    } })
+    local home = cheatsheet.new(fake, config):buildNavigation().home
+    t.equal(home[1].kind, "diagnostic")
+    t.equal(home[2].kind, "sheets")
+    t.equal(home[3].kind, "prompts")
+    t.equal(home[4].kind, "links")
+    t.equal(home[5].kind, "app")
+    t.equal(home[#home - 1].kind, "bwhash")
+    t.equal(home[#home].kind, "editsheets")
+end)
+
+t.test("empty repositories expose non-actionable category empty states", function()
+    local tree = cheatsheet.new(Fake.new(), config):buildNavigation()
+    for index = 1, 3 do
+        local empty = tree.home[index].children[1]
+        t.equal(empty.kind, "empty")
+        t.equal(empty.role, "empty")
+    end
+end)
+
+t.test("valid empty files expose non-actionable leaf empty states", function()
+    local fake = Fake.new({ files = {
+        ["/repo/sheets/empty.md"] = "# Empty\n",
+        ["/repo/links/empty.md"] = "# Empty Links\n",
+    } })
+    local tree = cheatsheet.new(fake, config):buildNavigation()
+    t.equal(tree.home[1].children[1].children[1].kind, "empty")
+    t.equal(tree.home[1].children[1].children[1].role, "empty")
+    t.equal(tree.home[3].children[1].children[1].kind, "empty")
+    t.equal(tree.home[3].children[1].children[1].role, "empty")
+end)
+
+t.test("buildIndex excludes navigation and empty nodes while aggregating diagnostics", function()
+    local fake = Fake.new({ missing = { ["/repo/sheets"] = true } })
+    local result = cheatsheet.new(fake, config):buildIndex()
+    t.equal(#result.diagnostics, 1)
+    t.equal(#result.records, 3)
+    t.equal(result.records[1].kind, "diagnostic")
+    t.equal(result.records[2].kind, "bwhash")
+    t.equal(result.records[3].kind, "editsheets")
+    for _, record in ipairs(result.records) do
+        t.truthy(record.role ~= "navigation")
+        t.truthy(record.kind ~= "empty")
+    end
 end)
 
 t.test("controller derives adjacent shared directories and indexes regular files", function()
