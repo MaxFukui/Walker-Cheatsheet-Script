@@ -39,3 +39,6 @@ Capture pane to buffer | Prefix + :capture-pane
 Save buffer to file | Prefix + :save-buffer <file>
 Save session Resurrect | Prefix + Ctrl-S
 Load session Resurrect | Prefix + Ctrl-R
+
+## Commands
+Select Layout | :select-layout even-horizontal
