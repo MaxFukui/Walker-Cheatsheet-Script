@@ -30,7 +30,7 @@ hyprctl reload
 1. Press `Super + C` (or your configured keybinding)
 2. First menu appears with top-level items:
    - **Prompts** — list files from `prompts/`, selecting copies entire file content to clipboard
-   - **Links** — list entries from `links/*.md`, selecting opens URL in Firefox
+   - **Links** — entries from `links/general.md` plus one `▸ Collection` entry per other `links/*.md` file (see [Adding Links](#adding-links))
    - **BW Hash** — prompt for a passphrase, generates SHA256 hash and copies to clipboard
    - **Edit Sheets** — opens Ghostty + Neovim in the cheatsheet directory
    - **Sheet categories** — all `.md` files from `sheets/`
@@ -91,13 +91,55 @@ Place any text file in `~/.config/cheatsheet/prompts/`. Selecting it from the Pr
 
 ## Adding Links
 
-Create a markdown file in `~/.config/cheatsheet/links/` with `Name | URL` entries:
+Links live in `~/.config/cheatsheet/links/` as markdown files with `Name | URL` entries.
+The Links menu has two levels, decided by the file name:
 
+| File | Behavior in the Links menu |
+| --- | --- |
+| `general.md` | Its entries are listed **directly** — selecting one opens the URL |
+| any other `*.md` | Shown as a **single collapsed entry** prefixed with `▸` — selecting it opens a second menu with that file's links |
+
+The `▸` prefix is the folder marker: an entry carrying it holds more links
+behind it, it is never a URL itself.
+
+`links/general.md` — flat, always visible:
 ```markdown
-# My Links
+# Quick Links
 
 GitHub | https://github.com
 Arch Wiki | https://wiki.archlinux.org
+```
+
+`links/frontend.md` — a collection, collapsed behind one entry:
+```markdown
+# FrontEnd
+
+Context7 | https://context7.com/
+Impeccable | https://impeccable.style/
+```
+
+Resulting menu:
+```
+GitHub
+Arch Wiki
+▸ FrontEnd          <- select to open the FrontEnd links
+```
+
+**Format rules:**
+- First line SHOULD be a markdown header (`# Title`) — it becomes the collection
+  label in the menu. Without one, the file name (minus `.md`) is used.
+- Each entry: `Name | URL` — only the **first** `|` is the delimiter
+- `#` lines and empty lines are ignored
+- Collections are one level deep only — nested subfolders are not scanned
+
+**Creating a new collection:** drop a new `.md` file in `links/`. Nothing else to
+edit; the script picks it up on the next run. Put a link in `general.md` only when
+it should be reachable without an extra keystroke.
+
+**Changing the defaults:** the two variables at the top of `cheatsheet.sh` control this:
+```bash
+LINKS_ROOT_FILE="general.md"   # file whose links are shown inline
+LINK_GROUP_PREFIX="▸ "          # marker prefixed to collection entries
 ```
 
 ## Customization
@@ -134,7 +176,8 @@ printf "%-30s → %s\n", description, command;
 ├── prompts/               # Full-file prompts (copied to clipboard)
 │   └── my-prompt.md
 └── links/                 # URL collections (opened in Firefox)
-    └── general.md
+    ├── general.md         # shown inline in the Links menu
+    └── frontend.md        # shown as "▸ FrontEnd", opens a submenu
 ```
 
 ## Dependencies

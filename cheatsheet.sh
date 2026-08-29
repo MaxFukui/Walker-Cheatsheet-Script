@@ -6,6 +6,11 @@ CHEATSHEET_DIR="$HOME/.config/cheatsheet/sheets"
 PROMPTS_DIR="$HOME/.config/cheatsheet/prompts"
 LINKS_DIR="$HOME/.config/cheatsheet/links"
 
+# Links menu: this file's entries show inline at the top level, every other
+# links/*.md becomes a browsable collection prefixed with LINK_GROUP_PREFIX
+LINKS_ROOT_FILE="general.md"
+LINK_GROUP_PREFIX="▸ "
+
 # Ensure the cheatsheet directory exists
 if [ ! -d "$CHEATSHEET_DIR" ]; then
     notify-send "Cheatsheet" "Directory not found: $CHEATSHEET_DIR"
@@ -71,27 +76,6 @@ list_prompts() {
     done
 }
 
-# List links as "Name|URL" from markdown files
-list_links() {
-    for file in "$LINKS_DIR"/*.md; do
-        [ -f "$file" ] || continue
-        # Parse each line for "Name | URL" format
-        awk -F'|' '
-        /^[[:space:]]*$/ { next }
-        /^#/ { next }
-        {
-            name = $1;
-            url = $2;
-            gsub(/^[ \t]+|[ \t]+$/, "", name);
-            gsub(/^[ \t]+|[ \t]+$/, "", url);
-            if (name != "" && url != "") {
-                print name "|" url;
-            }
-        }' "$file"
-    done
-}
-
-
 # Function to parse and format cheatsheet entries (inspired by parse_bindings)
 parse_cheatsheet() {
     awk '
@@ -145,21 +129,84 @@ handle_prompts() {
     fi
 }
 
-# Links flow: select a link then open it in Firefox
+# List links as "Name|URL" from a single markdown file
+list_links_in_file() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+    # Parse each line for "Name | URL" format
+    awk -F'|' '
+    /^[[:space:]]*$/ { next }
+    /^#/ { next }
+    {
+        name = $1;
+        url = $2;
+        gsub(/^[ \t]+|[ \t]+$/, "", name);
+        gsub(/^[ \t]+|[ \t]+$/, "", url);
+        if (name != "" && url != "") {
+            print name "|" url;
+        }
+    }' "$file"
+}
+
+# List link collections (every links/*.md except general.md) as "Label|filepath"
+list_link_groups() {
+    for file in "$LINKS_DIR"/*.md; do
+        [ -f "$file" ] || continue
+        [ "$(basename "$file")" = "$LINKS_ROOT_FILE" ] && continue
+        label=$(get_header "$file")
+        if [ -z "$label" ]; then
+            label=$(basename "$file" .md)
+        fi
+        echo "$label|$file"
+    done
+}
+
+# Top-level Links menu: general.md links inline + one entry per collection
+display_links_root() {
+    list_links_in_file "$LINKS_DIR/$LINKS_ROOT_FILE" | awk -F'|' '{print $1}'
+    list_link_groups | awk -F'|' -v p="$LINK_GROUP_PREFIX" '{print p $1}'
+}
+
+# Open a URL in Firefox
+open_link() {
+    local name="$1" url="$2"
+    [ -z "$url" ] && return
+    firefox "$url" &
+    notify-send "Links" "Opening: $name"
+}
+
+# Show the links of a single collection file
+handle_link_group() {
+    local file="$1" label="$2"
+    link_sel=$(list_links_in_file "$file" | awk -F'|' '{print $1}' | walker --dmenu -p "$label" --width 1000 --height "$menu_height")
+    [ -z "$link_sel" ] && return
+    url=$(list_links_in_file "$file" | awk -F'|' -v sel="$link_sel" '$1==sel{print $2; exit}')
+    open_link "$link_sel" "$url"
+}
+
+# Links flow: general links open directly, collections open a submenu
 handle_links() {
     # Ensure links directory exists
     if [ ! -d "$LINKS_DIR" ]; then
         notify-send "Links" "Directory not found: $LINKS_DIR"
         return
     fi
-    # Show list of links
-    link_sel=$(list_links | awk -F'|' '{print $1}' | walker --dmenu -p 'Links' --width 1000 --height "$menu_height")
+    # Show general links plus collection entries
+    link_sel=$(display_links_root | walker --dmenu -p 'Links' --width 1000 --height "$menu_height")
     [ -z "$link_sel" ] && return
-    url=$(list_links | awk -F'|' -v sel="$link_sel" '$1==sel{print $2; exit}')
-    [ -z "$url" ] && return
-    # Open URL in Firefox
-    firefox "$url" &
-    notify-send "Links" "Opening: $link_sel"
+
+    # A collection was picked — descend into it
+    if [[ "$link_sel" == "$LINK_GROUP_PREFIX"* ]]; then
+        label="${link_sel#"$LINK_GROUP_PREFIX"}"
+        file=$(list_link_groups | awk -F'|' -v sel="$label" '$1==sel{print $2; exit}')
+        [ -z "$file" ] && return
+        handle_link_group "$file" "$label"
+        return
+    fi
+
+    # A general link was picked — open it directly
+    url=$(list_links_in_file "$LINKS_DIR/$LINKS_ROOT_FILE" | awk -F'|' -v sel="$link_sel" '$1==sel{print $2; exit}')
+    open_link "$link_sel" "$url"
 }
 
 # BW Hash flow: prompt for passphrase, generate SHA256 hash, copy to clipboard
