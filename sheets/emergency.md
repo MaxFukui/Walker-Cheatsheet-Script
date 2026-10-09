@@ -14,3 +14,8 @@ Turn off Net interface | sudo ip link set enp3s0 down
 Turn on Net interface | sudo ip link set enp3s0 up
 Restart net interface | systemctl restart systemd-networkd
 
+## Sequence that helps
+Deleting default | sudo ip route del default
+Just ARP for it, reachable without nexthop, teaching how to reach the host | sudo ip route add <ip> dev enp3s0 scope link
+Add new Default | sudo ip route add default via <ip> dev enp3s0
+
