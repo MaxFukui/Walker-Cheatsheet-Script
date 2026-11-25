@@ -24,3 +24,8 @@ Tail stating from line 2 | tail -n +2 (plus means starts from line 2)
 Restart systemd service | systemctl restart <service>
 See json | jq '.' file.json or file.json /pipe/ jq '.'
 count lines | ls /pipe/ wc -l
+Move file to previous dir | mv <file> ~-
+Move file to $OLDPWD | mv <file> "$OLDPWD"
+Go to previous directory | cd -
+Print previous directory | echo "$OLDPWD"
+~ ~- expands to $OLDPWD (last dir from cd). Needs at least one cd in the session.
